@@ -43,8 +43,12 @@ class VendorNegotiationState(TypedDict):
     Fields:
         vendor_id           Unique identifier for the vendor being assessed.
         raw_log_text        The raw vendor communication / log text to analyse.
-        retrieved_policies  List of compliance policy strings retrieved from
-                            the Pinecone vector DB by the researcher node.
+        retrieved_policies  List of compliance policy strings returned by the
+                            researcher node. Currently a keyword match over a
+                            6-entry dict (app/tools.py:88-146) — no vector store
+                            is involved. Target: Postgres + pgvector, returning
+                            policy IDs rather than bare strings. See
+                            docs/decisions/0002-vector-store.md.
         risk_classification Structured Pydantic model produced by the
                             classifier node. None until that node executes.
         action_taken        Human-readable description of the action executed

@@ -9,8 +9,9 @@ Exposes two endpoints:
 
 The compiled graph is imported from `app.graph` (eagerly built at module load).
 The `lifespan` context manager handles application-level setup/teardown
-(logging configuration, future async clients like Pinecone SDK, etc.) but does
-NOT compile the graph — that happens synchronously at import time.
+(logging configuration) but does NOT compile the graph — that happens
+synchronously at import time. Target design moves compilation into lifespan so a
+Postgres checkpointer can be attached; see docs/decisions/0003-durable-execution.md.
 
 To run:
     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -47,7 +48,11 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     Startup:
       - Configure logging from LOG_LEVEL env var.
       - Log settings summary (omitting secrets).
-      - Future: initialise async Pinecone client, connection pools, etc.
+
+    NOTE: this does not validate anything. An invalid GEMINI_API_KEY, an
+    unreachable policy store, and an empty corpus all still produce a process
+    that serves 200 from /health. Fail-fast startup is specified in
+    docs/LLD.md §2.
 
     Shutdown:
       - Future: gracefully close DB connections, flush queues, etc.
@@ -58,9 +63,8 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
 
     logger.info("=== Vendor Negotiation & Risk Matrix — STARTING UP ===")
     logger.info(
-        "Settings | model=%s | pinecone_index=%s | log_level=%s",
+        "Settings | model=%s | log_level=%s",
         settings.gemini_model_name,
-        settings.pinecone_index_name,
         settings.log_level,
     )
     logger.info("LangGraph compiled_graph ready | nodes=%s", list(compiled_graph.nodes))
@@ -78,9 +82,11 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
 app = FastAPI(
     title="Autonomous Vendor Negotiation & Risk Matrix",
     description=(
-        "A multi-agent supply chain risk assessment system powered by LangGraph, "
-        "LangChain, and OpenAI. Accepts vendor communication logs and returns "
-        "a structured risk classification with optional automated remediation."
+        "PROTOTYPE — not production. A three-step LangGraph pipeline (policy "
+        "retrieval -> LLM risk classification -> conditional vendor pause) built on "
+        "LangGraph, LangChain, and Google Gemini. Both tools are mocked: policy "
+        "retrieval is a keyword match over a 6-entry dict, and the vendor pause "
+        "makes no network call. This endpoint is unauthenticated. See docs/ROADMAP.md."
     ),
     version="0.1.0",
     lifespan=lifespan,

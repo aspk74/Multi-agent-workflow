@@ -18,7 +18,12 @@ from pydantic import BaseModel, Field
 class RiskClassification(BaseModel):
     """
     Structured output produced by the classifier LLM node.
-    Maps directly to the JSON schema sent to OpenAI via `with_structured_output`.
+
+    Maps to the JSON schema sent to the model provider via `with_structured_output`.
+    The provider is Google Gemini (app/agents.py:22), not OpenAI.
+
+    `confidence_score` is a MODEL SELF-REPORT, not a calibrated probability. It must
+    never be used to gate routing or actions — see docs/THREAT_MODEL.md §4.3.
     """
 
     risk_level: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"] = Field(

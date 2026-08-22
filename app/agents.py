@@ -98,7 +98,16 @@ def classifier_node(state: VendorNegotiationState) -> dict:
 
     Uses `ChatGoogleGenerativeAI.with_structured_output(RiskClassification)` to
     guarantee the response conforms to the Pydantic schema — no manual parsing
-    needed. temperature=0 ensures deterministic, reproducible classifications.
+    needed.
+
+    NOTE — this node is NOT deterministic, despite temperature=0:
+      - temperature=0 reduces sampling variance; it does not guarantee identical
+        output across calls, model versions, or provider-side changes.
+      - The prompt itself varies between processes: `retrieve_policies` builds its
+        result from a `set` (app/tools.py:126,135), and Python randomises string
+        hashing per process, so policy ORDER changes between server restarts.
+    See docs/SLOS.md §4 — determinism is a measured target (>=98% agreement across
+    runs), not a property this code provides.
 
     Updates:
         risk_classification: a validated RiskClassification Pydantic model.

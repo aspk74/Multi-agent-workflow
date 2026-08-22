@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "vendor-risk-matrix"
 version = "0.1.0"
-description = "Autonomous Vendor Negotiation & Risk Matrix — a production-grade multi-agent system for supply chain risk assessment."
+description = "Autonomous Vendor Negotiation & Risk Matrix — a LangGraph pipeline for supply chain vendor risk assessment. Prototype; see docs/ROADMAP.md."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

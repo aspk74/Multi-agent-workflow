@@ -45,14 +45,19 @@ class Settings(BaseSettings):
         description="Gemini model to use for risk classification.",
     )
 
-    # ── Pinecone ────────────────────────────────────────────────────────────
+    # ── Pinecone — DEAD, scheduled for removal in Phase 2 ───────────────────
+    # Neither field is read by any code path. `langchain-pinecone` is a declared
+    # dependency (pyproject.toml:19) that is never imported. The vector store
+    # decision was settled as Postgres + pgvector — see
+    # docs/decisions/0002-vector-store.md. Removing these is a breaking config
+    # change, tracked as docs/LLD.md §8 row 6.
     pinecone_api_key: SecretStr = Field(
         default=SecretStr(""),
-        description="Pinecone API key — required for live vector retrieval (optional for mocked mode).",
+        description="DEAD — never read. Removal scheduled for Phase 2.",
     )
     pinecone_index_name: str = Field(
         default="vendor-compliance-policies",
-        description="Name of the Pinecone index containing compliance policy embeddings.",
+        description="DEAD — never read. Removal scheduled for Phase 2.",
     )
 
     # ── Application ─────────────────────────────────────────────────────────
@@ -60,6 +65,8 @@ class Settings(BaseSettings):
         default="INFO",
         description="Python logging level: DEBUG | INFO | WARNING | ERROR | CRITICAL",
     )
+    # DEAD — never read by any code. uvicorn takes host/port from its own CLI
+    # args (see README). Removal scheduled for Phase 2, docs/LLD.md §8 row 6.
     app_host: str = Field(default="0.0.0.0")
     app_port: int = Field(default=8000)
 

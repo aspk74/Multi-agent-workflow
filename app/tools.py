@@ -10,8 +10,12 @@ IMPORTANT — invocation:
     ✅  retrieve_policies.invoke({"vendor_id": "V-1234", "log_text": "..."})
     ❌  retrieve_policies("V-1234", "...")  # bypasses LangChain validation
 
-Both tools are mocked for local/demo use. TODO comments mark exactly where
-real Pinecone / procurement-API code would be wired in.
+Both tools are MOCKED. Neither makes a network call:
+  - retrieve_policies   keyword-matches a 6-entry dict (no embeddings, no vector store)
+  - execute_vendor_pause formats a string with a random UUID (nothing is suspended)
+
+TODO comments below mark where the real implementations go. Target design:
+docs/LLD.md §6.4 (pgvector retrieval) and §6.6 (procurement client).
 """
 
 from __future__ import annotations
@@ -30,7 +34,9 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Mock policy database keyed by topic keywords.
-# In production this is replaced by a Pinecone similarity search.
+# Target: a real corpus in data/policies/, chunked and embedded into Postgres
+# pgvector (docs/decisions/0002-vector-store.md). Six paragraphs is not a
+# compliance corpus.
 _MOCK_POLICY_DB: dict[str, str] = {
     "delivery": (
         "POLICY-001 (On-Time Delivery): Vendors must maintain ≥ 95% on-time delivery "
@@ -90,9 +96,15 @@ def retrieve_policies(vendor_id: str, log_text: str) -> list[str]:
     """
     Retrieve relevant compliance policy documents for a given vendor log.
 
-    Simulates a semantic similarity search against a Pinecone vector database
-    of supply-chain compliance rules. In production, replace the mock logic
-    below with a real Pinecone query.
+    MOCK. Substring-matches 13 hardcoded keywords against the log text and
+    returns the matching entries from a 6-entry dict. This is not a similarity
+    search and there is no vector store.
+
+    KNOWN DEFECT: `matched_topics` is a set (below), so the ORDER of the returned
+    policies is not stable across processes — Python randomises string hashing
+    per process. Since this list is rendered into the classifier prompt
+    (app/agents.py:123-125), identical input can yield different verdicts after a
+    server restart. Fix: sort before building the list. ROADMAP work-order step 4.
 
     Args:
         vendor_id: The unique vendor identifier (used for audit logging).
@@ -104,21 +116,18 @@ def retrieve_policies(vendor_id: str, log_text: str) -> list[str]:
     """
     logger.info("retrieve_policies | vendor_id=%s | querying policy store", vendor_id)
 
-    # ── TODO: Replace mock with real Pinecone retrieval ─────────────────────
-    # from langchain_pinecone import PineconeVectorStore
-    # from langchain_openai import OpenAIEmbeddings
-    # from app.config import get_settings
-    #
-    # settings = get_settings()
-    # embeddings = OpenAIEmbeddings(
-    #     api_key=settings.openai_api_key.get_secret_value()
-    # )
-    # vectorstore = PineconeVectorStore(
-    #     index_name=settings.pinecone_index_name,
-    #     embedding=embeddings,
-    # )
-    # results = vectorstore.similarity_search(log_text, k=5)
-    # policies = [doc.page_content for doc in results]
+    # ── TODO(Phase 2): replace this mock with pgvector retrieval ────────────
+    # Do NOT use Pinecone. That decision was reversed — see
+    # docs/decisions/0002-vector-store.md. The replacement lives in
+    # app/retrieval.py and is specified in docs/LLD.md §6.4:
+    #   - policy chunks + embeddings in Postgres (pgvector, 1536 dims)
+    #   - hybrid query: top-8 by cosine, unioned with literal POLICY-NNN mentions
+    #   - ORDER BY embedding <=> $1 ASC, policy_id ASC, chunk_index ASC
+    #     (the trailing tiebreakers are what make ordering stable across processes)
+    #   - returns PolicyChunk objects, so the IDs used can be persisted and shown
+    #     to a vendor who disputes the decision
+    # An earlier version of this comment referenced `settings.openai_api_key`,
+    # which has never existed in Settings (app/config.py:26-64).
     # ────────────────────────────────────────────────────────────────────────
 
     # Mock: keyword-based policy matching
@@ -174,20 +183,24 @@ def execute_vendor_pause(vendor_id: str, reason: str) -> str:
         reason,
     )
 
-    # ── TODO: Replace mock with real procurement API call ───────────────────
-    # import httpx
-    # from app.config import get_settings
+    # ── TODO(Phase 5): replace this mock with the real procurement client ───
+    # Specified in docs/LLD.md §6.6. The snippet that used to live here does not
+    # work: `settings.procurement_api_base_url` and `settings.procurement_api_key`
+    # do not exist in Settings (app/config.py:26-64) and must be added first.
     #
-    # settings = get_settings()
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.post(
-    #         f"{settings.procurement_api_base_url}/vendors/{vendor_id}/pause",
-    #         json={"reason": reason, "initiated_by": "risk-matrix-agent"},
-    #         headers={"Authorization": f"Bearer {settings.procurement_api_key.get_secret_value()}"},
-    #         timeout=10.0,
-    #     )
-    #     response.raise_for_status()
-    #     return response.text
+    # Three requirements that the old snippet omitted, all load-bearing:
+    #   1. Exactly-once. INSERT action_execution(status='pending') with
+    #      UNIQUE(action_key) BEFORE the HTTP call; IntegrityError means a pause
+    #      already exists — return its txn id and make no call at all.
+    #      See docs/decisions/0006-idempotency.md.
+    #   2. Pass action_key as the downstream Idempotency-Key so the procurement
+    #      system can dedupe independently of us.
+    #   3. This call must not be reachable without a human approval while
+    #      AUTONOMY_MODE=approve_required. See docs/decisions/0005-autonomy-level.md.
+    #
+    # OPEN QUESTION blocking this work: does the procurement system expose an
+    # un-pause endpoint? If not, autonomy is permanently off the table.
+    # ROADMAP Open Decision 8.
     # ────────────────────────────────────────────────────────────────────────
 
     # Mock: generate a realistic-looking procurement system response
