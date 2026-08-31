@@ -437,3 +437,143 @@ def test_webhook_vendor_log_high_risk():
     assert response.status_code == 200
     assert response.json()["risk_classification"]["risk_level"] in ("HIGH", "CRITICAL")
 ```
+
+---
+
+## 9. TOOLING & DEPENDENCIES
+
+### Key Dependencies
+
+| Package | Version | Purpose |
+|---|---|---|
+| **langgraph** | ≥0.2.0 | Orchestration engine |
+| **langchain** | ≥0.3.0 | LLM framework (utilities, base classes) |
+| **langchain-core** | ≥0.3.0 | LLM abstractions |
+| **langchain-google-genai** | ≥2.0.0 | Google Gemini integration |
+| **fastapi** | ≥0.115.0 | Web framework |
+| **uvicorn** | ≥0.34.0 | ASGI server |
+| **pydantic** | ≥2.0.0 | Data validation |
+| **pydantic-settings** | ≥2.0.0 | Environment config |
+| **python-dotenv** | ≥1.0.0 | .env file loading |
+| **httpx** | ≥0.27.0 | HTTP client (mock procurement API) |
+
+### Dead Dependencies
+
+- **langchain-pinecone** ≥0.2.0 — Listed but never imported
+
+### Dev Dependencies
+
+- **pytest** — Framework (no tests exist)
+- **pytest-asyncio** — Async test support
+- **ruff** — Linter
+- **mypy** — Type checker
+
+---
+
+## 10. DEPLOYMENT & DEVOPS
+
+### Current State
+
+- **No container:** No `Dockerfile`, no `.dockerignore`
+- **No lock file:** Dependencies are open ranges (`>=`), not pinned
+- **No IaC:** No Terraform, no Kubernetes manifests
+- **No CI:** No GitHub Actions, no deployment pipeline
+- **Production run:** Doesn't exist. Only development server (`uvicorn --reload`)
+
+### Target Deployment (from ADR-0007)
+
+See `docs/decisions/0007-deployment-target.md` for the deployment strategy. Phase 2+ work.
+
+---
+
+## 11. CONVENTIONS FOR AI ASSISTANTS
+
+### Code Style
+
+- **Line length:** 100 characters (enforced by ruff)
+- **Import style:** isort (automatic via ruff)
+- **Type hints:** Required. Use `from __future__ import annotations` for forward references.
+- **Docstrings:** One-line docstrings for functions. Multi-line only if behavior is non-obvious.
+- **Variable names:** `snake_case`. Avoid single-letter vars except in comprehensions.
+
+### When Adding Features
+
+1. **Update state first:** If the feature requires new data, add fields to `AgentState` in `state.py`.
+2. **Update the graph:** Add nodes or edge cases in `graph.py`.
+3. **Update the API:** Add fields to `WorkflowResult` in `main.py` if callers need them.
+4. **Add tests:** Create test cases in `tests/`.
+5. **Update docs:** If the feature changes behavior, update the relevant doc in `docs/`.
+
+### When Fixing Bugs
+
+1. **Reproduce:** Write a test that fails with the bug.
+2. **Fix:** Make the minimal change to pass the test.
+3. **Verify:** Run the full test suite locally.
+4. **Commit:** Reference the issue number if applicable.
+
+### When Refactoring
+
+- Don't introduce abstractions ahead of time. Three similar things → extract; two things → leave alone.
+- Keep each PR focused on one concern.
+- Run `ruff check --fix` and `mypy` locally before pushing.
+
+### Logging
+
+- Use `logger = logging.getLogger(__name__)` in each module.
+- Log at appropriate levels: `DEBUG` for detailed traces, `INFO` for state changes, `WARNING` for recoverable errors, `ERROR` for failures.
+- Avoid logging secrets (API keys, vendor IDs in contexts where they shouldn't be).
+
+---
+
+## 12. COMMON TASKS
+
+### Running the Full Workflow End-to-End
+
+```bash
+# Terminal 1: Start the server
+uvicorn app.main:app --reload
+
+# Terminal 2: Send a vendor log
+curl -X POST http://localhost:8000/webhook/vendor-log \
+  -H "Content-Type: application/json" \
+  -d '{"vendor_id": "V-1234", "log_text": "Your test log here"}'
+```
+
+### Viewing the Graph Structure
+
+```python
+# In Python REPL
+from app.graph import compiled_graph
+
+# Print ASCII representation
+print(compiled_graph.get_graph().draw_ascii())
+```
+
+### Checking Which Policies Match
+
+```bash
+# Hard-coded policies are in app/tools.py:34-69
+# Keywords are in app/tools.py:71-85
+# Matcher is in app/tools.py:88-146
+
+# To test matching locally:
+from app.tools import retrieve_policies
+
+log_text = "Vendor missed delivery deadline..."
+policies = retrieve_policies(log_text)
+for policy in policies:
+    print(policy)
+```
+
+### Disabling Structured Output (for debugging)
+
+If the LLM's structured output parsing breaks:
+
+```python
+# In agents.py, replace:
+llm = ChatGoogleGenerativeAI(...).with_structured_output(RiskClassification)
+
+# With:
+llm = ChatGoogleGenerativeAI(...)
+# Then manually parse response.content as JSON
+```
