@@ -577,3 +577,83 @@ llm = ChatGoogleGenerativeAI(...).with_structured_output(RiskClassification)
 llm = ChatGoogleGenerativeAI(...)
 # Then manually parse response.content as JSON
 ```
+
+---
+
+## 13. DECISION LOG & RATIONALE
+
+Key architectural decisions are documented in `docs/decisions/`:
+
+| ADR | Title | Key Decision |
+|---|---|---|
+| **0001** | LLM Provider | OpenAI (not yet implemented; currently Gemini) |
+| **0002** | Vector Store | Postgres + pgvector (not yet implemented) |
+| **0003** | Durable Execution | LangGraph with Postgres checkpointer (not yet implemented) |
+| **0004** | Ingestion Topology | S3 → SQS → consumer (partially untracked) |
+| **0005** | Autonomy Level | Full autonomy on HIGH/CRITICAL, human approval for others (not yet implemented) |
+| **0006** | Idempotency | Idempotency key + dedupe database (not yet implemented) |
+| **0007** | Deployment | Containerized, scaled, observability-first (not yet implemented) |
+| **0008** | API Auth | HMAC signature or API key (not yet implemented) |
+| **0009** | Guardrails | Deterministic risk taxonomy, no model drift (partially implemented) |
+| **0010** | Data Retention | All data persisted; policies returned with results (not yet implemented) |
+
+**Before making architectural changes**, check the corresponding ADR.
+
+---
+
+## 14. ROADMAP & NEXT STEPS
+
+The project is in Phase 1 (architecture & decisions). Upcoming phases:
+
+- **Phase 2:** Ingestion pipeline (S3 → SQS → consumer)
+- **Phase 3:** Real policy retrieval (Postgres + pgvector)
+- **Phase 4:** Durable execution (Postgres checkpointer)
+- **Phase 5:** Authentication & idempotency
+- **Phase 6:** Containerization & deployment
+
+See `docs/ROADMAP.md` for the full work order.
+
+---
+
+## 15. TROUBLESHOOTING
+
+### "ModuleNotFoundError: No module named 'app'"
+
+**Solution:** Ensure you're in the repo root and have run `pip install -e ".[dev]"`.
+
+### "GEMINI_API_KEY is missing"
+
+**Solution:** Create a `.env` file from `.env.example` and set `GEMINI_API_KEY`.
+
+### "The model `gemini-3.5-flash` does not exist"
+
+**Solution:** Set `GEMINI_MODEL_NAME` to a valid model ID, or remove it from `.env` to use the default.
+
+### "Results differ between server restarts"
+
+**This is a known bug.** See §4 (P0: Results Vary Between Restarts). The fix is to sort topics before building the policy list in `app/tools.py:135`.
+
+### Mypy reports "error: Incompatible return type" on a node
+
+**Cause:** Nodes return bare `dict` instead of `AgentState`.
+
+**Solution:** Add type hint `-> AgentState` to the node function.
+
+---
+
+## 16. USEFUL LINKS
+
+- **API Docs:** http://localhost:8000/docs (when server is running)
+- **Google AI Studio:** https://aistudio.google.com/
+- **LangGraph Docs:** https://langchain-ai.github.io/langgraph/
+- **LangChain Docs:** https://python.langchain.com/
+- **Pydantic Docs:** https://docs.pydantic.dev/
+
+---
+
+## 17. CONTACT & ATTRIBUTION
+
+- **Repository:** https://github.com/aspk74/Multi-agent-workflow
+- **License:** MIT
+
+**Last updated:** 2026-08-31 by Claude Code
