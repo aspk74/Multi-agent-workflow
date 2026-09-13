@@ -73,3 +73,57 @@ Multi-agent-workflow/
 | **SLOS.md** | Latency, availability, cost, and quality targets |
 | **THREAT_MODEL.md** | STRIDE analysis; §6 lists what is exploitable in the prototype |
 | **decisions/** | 10 ADRs (ADR-0000 through ADR-0010) documenting architectural choices |
+
+---
+
+## 3. ARCHITECTURE & DATA FLOW
+
+### The Pipeline (Current Prototype)
+
+```
+POST /webhook/vendor-log
+        │
+        ▼
+┌───────────────────┐
+│ researcher_node   │  Substring match over 6-entry dict
+└────────┬──────────┘  (no embeddings, no vector store)
+         │
+         ▼
+┌───────────────────┐
+│ classifier_node   │  LLM call: ChatGoogleGenerativeAI + structured output
+└────────┬──────────┘  (only node with a model call)
+         │
+   ┌─────┴──────┐
+   │            │
+  HIGH/     LOW/MEDIUM
+ CRITICAL       │
+   │            ▼
+   ▼           END
+┌──────────────────┐
+│   action_node    │  String formatting (mock vendor pause)
+└──────────────────┘
+```
+
+### Workflow State (`app/state.py`)
+
+TypedDict carries data between nodes:
+
+```python
+class AgentState(TypedDict):
+    vendor_id: str
+    log_text: str
+    retrieved_policies: list[str]
+    risk_classification: RiskClassification | None
+    action_taken: str
+    retrieved_policies_count: int
+```
+
+### Node Responsibilities
+
+| Node | Function | Line Range | Model Call? |
+|---|---|---|---|
+| **researcher_node** | Finds policies matching keywords in vendor log | `agents.py:40-66` | No |
+| **classifier_node** | Asks LLM to classify risk and return structured output | `agents.py:95-148` | **Yes** |
+| **action_node** | Formats mock vendor pause response | `agents.py:165-228` | No |
+
+**Key detail:** This is **not** a multi-agent system. Two of three nodes have no model call. It's a 3-step pipeline with one branch.
