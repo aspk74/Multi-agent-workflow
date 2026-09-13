@@ -236,3 +236,57 @@ cp .env.example .env
 | **APP_PORT** | Uvicorn bind port | No | `8000` (dead code) |
 
 **Dead fields:** `APP_HOST`, `APP_PORT`, `PINECONE_API_KEY`, `PINECONE_INDEX_NAME` are never read by any code.
+
+---
+
+## 6. RUNNING THE APPLICATION
+
+### Start the Server
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+- **`--reload`** enables hot reload during development
+- Server runs on `http://localhost:8000`
+- OpenAPI docs at `http://localhost:8000/docs`
+
+### Test the Endpoints
+
+#### Health Check
+
+```bash
+curl http://localhost:8000/health
+```
+
+Returns `200` if the process is alive (does **not** validate API key or connectivity).
+
+#### Classify a Vendor Log
+
+```bash
+curl -X POST http://localhost:8000/webhook/vendor-log \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vendor_id": "V-1234",
+    "log_text": "Vendor missed delivery deadline by 15 days and unilaterally increased contract prices by 40% without notice. Multiple quality non-conformances detected in last shipment."
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "vendor_id": "V-1234",
+  "risk_classification": {
+    "risk_level": "CRITICAL",
+    "confidence_score": 0.94,
+    "risk_factors": ["15-day delivery delay..."],
+    "recommended_action": "Suspend purchasing authority...",
+    "reasoning": "Breaches POLICY-001..."
+  },
+  "action_taken": "{\"status\": \"VENDOR_PAUSED\", \"vendor_id\": \"V-1234\", \"transaction_id\": \"TXN-4F2A9C1E7B03\", ...}",
+  "retrieved_policies_count": 5
+}
+```
+
+**Note:** `risk_classification` varies per request due to model sampling. Everything else is deterministic (except policy order, which varies between server restarts due to the `set` bug).
