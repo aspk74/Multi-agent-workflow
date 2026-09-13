@@ -373,3 +373,207 @@ result = llm.invoke(prompt)  # Returns RiskClassification, never a string
 
 **Pattern for AI assistants:**
 If a node raises, the entire request fails. Consider adding a try/except inside the node if you want partial recovery.
+
+---
+
+## 8. TESTING & QUALITY ASSURANCE
+
+### Current State
+
+- **Tests:** None. `pytest` is configured (`pyproject.toml:62-64`) but collects zero tests (no `tests/` directory).
+- **Type checking:** `mypy --strict` is configured (`pyproject.toml:57-60`) but has never been run. All three nodes annotate bare `-> dict`, which strict mypy would flag.
+- **Linting:** `ruff` is configured (`pyproject.toml:49-55`) but has never been run in CI.
+- **CI:** No `.github/` directory. No CI pipeline.
+
+### Running Local Checks
+
+```bash
+# Format & lint with ruff
+ruff check --fix app/
+
+# Type check
+mypy app/
+
+# Run tests (will find zero tests until you add some)
+pytest
+```
+
+### Where to Add Tests
+
+Create `tests/` directory with test modules for agents, graph, tools, API endpoints, and models.
+
+---
+
+## 9. TOOLING & DEPENDENCIES
+
+### Key Dependencies
+
+| Package | Version | Purpose |
+|---|---|---|
+| **langgraph** | ≥0.2.0 | Orchestration engine |
+| **langchain** | ≥0.3.0 | LLM framework |
+| **langchain-core** | ≥0.3.0 | LLM abstractions |
+| **langchain-google-genai** | ≥2.0.0 | Google Gemini integration |
+| **fastapi** | ≥0.115.0 | Web framework |
+| **uvicorn** | ≥0.34.0 | ASGI server |
+| **pydantic** | ≥2.0.0 | Data validation |
+| **pydantic-settings** | ≥2.0.0 | Environment config |
+| **python-dotenv** | ≥1.0.0 | .env file loading |
+| **httpx** | ≥0.27.0 | HTTP client |
+
+### Dead Dependencies
+
+- **langchain-pinecone** ≥0.2.0 — Listed but never imported
+
+---
+
+## 10. DEPLOYMENT & DEVOPS
+
+### Current State
+
+- **No container:** No `Dockerfile`, no `.dockerignore`
+- **No lock file:** Dependencies are open ranges (`>=`), not pinned
+- **No CI:** No GitHub Actions, no deployment pipeline
+- **Production:** Doesn't exist. Only `uvicorn --reload`
+
+### Target Deployment
+
+See `docs/decisions/0007-deployment-target.md` for the strategy.
+
+---
+
+## 11. CONVENTIONS FOR AI ASSISTANTS
+
+### Code Style
+
+- **Line length:** 100 characters (ruff)
+- **Type hints:** Required with `from __future__ import annotations`
+- **Docstrings:** One-line only, multi-line for non-obvious behavior
+- **Variable names:** `snake_case`
+
+### When Adding Features
+
+1. Update `AgentState` in `state.py` if needed
+2. Update graph nodes in `graph.py`
+3. Update `WorkflowResult` in `main.py` if callers need new fields
+4. Add tests
+5. Update docs
+
+### When Fixing Bugs
+
+1. Write a failing test
+2. Make minimal fix
+3. Verify full test suite
+4. Commit with issue reference
+
+### Logging
+
+- Use `logger = logging.getLogger(__name__)` in each module
+- Log at appropriate levels (DEBUG, INFO, WARNING, ERROR)
+- Avoid logging secrets
+
+---
+
+## 12. COMMON TASKS
+
+### Running the Full Workflow
+
+```bash
+# Terminal 1: Start server
+uvicorn app.main:app --reload
+
+# Terminal 2: Send vendor log
+curl -X POST http://localhost:8000/webhook/vendor-log \
+  -H "Content-Type: application/json" \
+  -d '{"vendor_id": "V-1234", "log_text": "Your test log"}'
+```
+
+### Viewing the Graph
+
+```python
+from app.graph import compiled_graph
+print(compiled_graph.get_graph().draw_ascii())
+```
+
+### Testing Policy Matching
+
+```python
+from app.tools import retrieve_policies
+policies = retrieve_policies("Vendor missed delivery...")
+for policy in policies:
+    print(policy)
+```
+
+---
+
+## 13. DECISION LOG & RATIONALE
+
+Key architectural decisions are documented in `docs/decisions/`:
+
+| ADR | Title |
+|---|---|
+| **0001** | LLM Provider (OpenAI, not yet implemented) |
+| **0002** | Vector Store (Postgres + pgvector) |
+| **0003** | Durable Execution (LangGraph + Postgres) |
+| **0004** | Ingestion Topology (S3 → SQS → consumer) |
+| **0005** | Autonomy Level (Human approval for non-critical) |
+| **0006** | Idempotency (Idempotency key + dedupe) |
+| **0007** | Deployment (Containerized, scaled) |
+| **0008** | API Auth (HMAC signature or API key) |
+| **0009** | Guardrails (Deterministic risk taxonomy) |
+| **0010** | Data Retention (Full persistence) |
+
+**Before making architectural changes**, check the corresponding ADR.
+
+---
+
+## 14. ROADMAP & NEXT STEPS
+
+The project is in Phase 1 (architecture & decisions). Upcoming phases:
+
+- **Phase 2:** Ingestion pipeline (S3 → SQS → consumer)
+- **Phase 3:** Real policy retrieval (Postgres + pgvector)
+- **Phase 4:** Durable execution (Postgres checkpointer)
+- **Phase 5:** Authentication & idempotency
+- **Phase 6:** Containerization & deployment
+
+See `docs/ROADMAP.md` for full work order.
+
+---
+
+## 15. TROUBLESHOOTING
+
+### "ModuleNotFoundError: No module named 'app'"
+
+Ensure you're in the repo root and have run `pip install -e ".[dev]"`.
+
+### "GEMINI_API_KEY is missing"
+
+Create `.env` from `.env.example` and set `GEMINI_API_KEY`.
+
+### "Results differ between server restarts"
+
+Known bug (§4 P0). Fix: sort topics in `app/tools.py:135`.
+
+### Mypy reports incompatible return type
+
+Add type hint `-> AgentState` to node functions.
+
+---
+
+## 16. USEFUL LINKS
+
+- **API Docs:** http://localhost:8000/docs (when running)
+- **Google AI Studio:** https://aistudio.google.com/
+- **LangGraph:** https://langchain-ai.github.io/langgraph/
+- **LangChain:** https://python.langchain.com/
+- **Pydantic:** https://docs.pydantic.dev/
+
+---
+
+## 17. CONTACT & ATTRIBUTION
+
+- **Repository:** https://github.com/aspk74/Multi-agent-workflow
+- **License:** MIT
+
+**Last updated:** 2026-09-13 by Claude Code
