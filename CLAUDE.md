@@ -127,3 +127,25 @@ class AgentState(TypedDict):
 | **action_node** | Formats mock vendor pause response | `agents.py:165-228` | No |
 
 **Key detail:** This is **not** a multi-agent system. Two of three nodes have no model call. It's a 3-step pipeline with one branch.
+
+---
+
+## 4. CRITICAL ISSUES & KNOWN DEFECTS
+
+### 🔴 P0: Results Vary Between Restarts
+
+**Location:** `app/tools.py:126`
+
+`retrieve_policies` collects matched topics into a Python `set`, which randomizes iteration order per process. This changes policy order in the prompt between server restarts — **directly contradicting the claim at `app/agents.py:101` that `temperature=0` ensures deterministic classifications.**
+
+**Fix:** Sort topics before building policy list. ~15 minutes.
+
+```python
+# Current (broken)
+matched_topics = set()
+# ... add to matched_topics ...
+for topic in matched_topics:  # Order varies per restart
+
+# Fixed
+for topic in sorted(matched_topics):  # Deterministic order
+```
