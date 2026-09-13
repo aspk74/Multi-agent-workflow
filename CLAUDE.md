@@ -290,3 +290,86 @@ curl -X POST http://localhost:8000/webhook/vendor-log \
 ```
 
 **Note:** `risk_classification` varies per request due to model sampling. Everything else is deterministic (except policy order, which varies between server restarts due to the `set` bug).
+
+---
+
+## 7. KEY ARCHITECTURAL PATTERNS
+
+### Configuration Management
+
+**File:** `app/config.py`
+
+- Uses `pydantic-settings` to load environment variables with validation
+- `SecretStr` for sensitive fields (API keys)
+- Singleton pattern with `@lru_cache` decorator for `get_settings()`
+- Logging configured from `LOG_LEVEL` env var; noisy dependencies muted
+
+**Pattern for AI assistants:**
+```python
+from app.config import get_settings
+
+settings = get_settings()
+api_key = settings.gemini_api_key.get_secret_value()
+```
+
+### State Management
+
+**File:** `app/state.py`
+
+LangGraph uses a `TypedDict` for state. All nodes read/write to it:
+
+```python
+class AgentState(TypedDict):
+    vendor_id: str
+    log_text: str
+    retrieved_policies: list[str]
+    risk_classification: RiskClassification | None
+    action_taken: str
+    retrieved_policies_count: int
+```
+
+**Pattern for AI assistants:**
+When adding fields:
+1. Update `AgentState` in `state.py`
+2. Update all nodes that use it
+3. Update `WorkflowResult` in `main.py` if the field should be returned to the caller
+
+### Conditional Routing
+
+**File:** `app/graph.py:45-72`
+
+```python
+def route_by_risk(state: AgentState) -> str:
+    """Route to action_node if risk is HIGH/CRITICAL, else END."""
+    if state.risk_classification is None:
+        return "end"
+    if state.risk_classification.risk_level in ("HIGH", "CRITICAL"):
+        return "action"
+    return "end"
+```
+
+Routes are defined as strings and matched in graph construction. Changing route logic requires updating `graph.py`.
+
+### Structured Output
+
+**File:** `app/models.py`
+
+Uses Pydantic with `langchain`'s `with_structured_output()`:
+
+```python
+llm = ChatGoogleGenerativeAI(...).with_structured_output(RiskClassification)
+result = llm.invoke(prompt)  # Returns RiskClassification, never a string
+```
+
+**To modify the schema:** Edit `RiskClassification` in `models.py`; the LLM call in `agents.py` will automatically enforce it.
+
+### Error Handling
+
+**File:** `app/main.py:97-116`, `app/main.py:214-225`
+
+- Global `HTTPException` handler for 400/404/422
+- Try/except around graph execution catches and logs unexpected errors
+- No partial results; everything degrades to 500
+
+**Pattern for AI assistants:**
+If a node raises, the entire request fails. Consider adding a try/except inside the node if you want partial recovery.
