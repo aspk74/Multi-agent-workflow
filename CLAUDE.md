@@ -149,3 +149,19 @@ for topic in matched_topics:  # Order varies per restart
 # Fixed
 for topic in sorted(matched_topics):  # Deterministic order
 ```
+
+### 🟠 P1: Mocked Integrations & Dead Code
+
+**Location:** `app/tools.py:88-146`, `app/tools.py:154-212`
+
+Both tools are non-functional stubs:
+- **Policy retrieval** (`retrieve_policies`): 6-entry hardcoded dict, substring matching, no vector store
+- **Vendor pause** (`pause_vendor`): Returns JSON string with random UUID, makes no HTTP call, suspends nothing
+
+Commented-out TODO blocks at `app/tools.py:107-121` and `app/tools.py:177-191` reference fields/classes that don't exist.
+
+### 🟠 P1: No API Authentication
+
+**Location:** `app/main.py:173-245`
+
+`POST /webhook/vendor-log` is completely unauthenticated. Any public user can POST and suspend a vendor. This is documented as exploitable in `docs/THREAT_MODEL.md §6`.
