@@ -197,3 +197,42 @@ Should move to `lifespan` (see `app/main.py:44-54`).
 **Location:** `app/agents.py:115-119`
 
 LLM client has only `model`, `google_api_key`, `temperature`. A Gemini API blip = HTTP 500.
+
+---
+
+## 5. DEVELOPMENT SETUP
+
+### Prerequisites
+
+- Python ≥ 3.11
+- Google AI Studio API key: https://aistudio.google.com/apikey
+
+### Installation
+
+```bash
+# Clone the repo
+cd /home/user/Multi-agent-workflow
+
+# Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies (including dev tools)
+pip install -e ".[dev]"
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env and set GEMINI_API_KEY
+```
+
+### Environment Variables
+
+| Variable | Purpose | Required | Default |
+|---|---|---|---|
+| **GEMINI_API_KEY** | Google Gemini API key | Yes | — |
+| **GEMINI_MODEL_NAME** | Model ID to use | No | `gemini-3.5-flash` |
+| **LOG_LEVEL** | Python logging level | No | `INFO` |
+| **APP_HOST** | Uvicorn bind address | No | `0.0.0.0` (dead code) |
+| **APP_PORT** | Uvicorn bind port | No | `8000` (dead code) |
+
+**Dead fields:** `APP_HOST`, `APP_PORT`, `PINECONE_API_KEY`, `PINECONE_INDEX_NAME` are never read by any code.
