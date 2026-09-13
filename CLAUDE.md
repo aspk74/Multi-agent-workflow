@@ -165,3 +165,35 @@ Commented-out TODO blocks at `app/tools.py:107-121` and `app/tools.py:177-191` r
 **Location:** `app/main.py:173-245`
 
 `POST /webhook/vendor-log` is completely unauthenticated. Any public user can POST and suspend a vendor. This is documented as exploitable in `docs/THREAT_MODEL.md §6`.
+
+### 🟡 P2: Missing Observability
+
+**Location:** `app/main.py:194`
+
+`correlation_id` is generated but:
+- Never returned to the caller (not in `WorkflowResult`, not in response headers)
+- Never persisted (no logging to structured store)
+- Not tied to LLM usage for cost tracking
+
+### 🟡 P2: No Input Validation on `log_text`
+
+**Location:** `app/main.py:132-138`
+
+Has `min_length=10` but no `max_length`. A 2 MB log bypasses rate limits and hits the model unfiltered.
+
+### 🟡 P2: LLM Client Rebuilt Per Request
+
+**Location:** `app/agents.py:115`
+
+`ChatGoogleGenerativeAI` is constructed inside `classifier_node` on every request instead of once at startup. This:
+- Adds latency (API key validation, client initialization)
+- Prevents centralized timeout/retry/fallback configuration
+- Wastes resources on connection setup
+
+Should move to `lifespan` (see `app/main.py:44-54`).
+
+### 🟡 P2: No Timeout / Retry / Fallback
+
+**Location:** `app/agents.py:115-119`
+
+LLM client has only `model`, `google_api_key`, `temperature`. A Gemini API blip = HTTP 500.
